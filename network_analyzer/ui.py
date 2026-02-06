@@ -401,7 +401,7 @@ def show_health_status(health: HealthStatus):
         color = "yellow"
     elif health.overall == "poor":
         symbol = "⚠"
-        color = "orange"
+        color = "bright_yellow"
     else:
         symbol = "✗"
         color = "red"
