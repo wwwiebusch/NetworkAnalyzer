@@ -28,6 +28,7 @@ logs/
 *.log
 *.log.*
 *.txt
+!requirements.txt
 
 # IDE
 .vscode/
