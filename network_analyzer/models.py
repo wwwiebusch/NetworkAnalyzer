@@ -132,3 +132,15 @@ class NetworkScan:
     channel: int
     rssi: int
     security: str
+
+
+@dataclass
+class IperfResult:
+    """iperf3 bandwidth test result."""
+    server: str
+    upload_mbps: float = 0.0
+    download_mbps: float = 0.0
+    upload_retransmits: int = 0
+    download_retransmits: int = 0
+    duration_s: int = 10
+    error: Optional[str] = None

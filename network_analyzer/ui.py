@@ -16,7 +16,8 @@ from network_analyzer.models import (
     PingResult,
     SpeedTestResult,
     HealthStatus,
-    NetworkScan
+    NetworkScan,
+    IperfResult
 )
 from network_analyzer.utils import format_bytes
 from io import StringIO
@@ -523,6 +524,61 @@ def print_error(message: str):
     console.print(f"[red]✗ {message}[/red]")
     if _logger_instance:
         _logger_instance.write_output(f"✗ {message}")
+
+
+def show_iperf3_results(result: IperfResult):
+    """Display iperf3 bandwidth test results.
+
+    Args:
+        result: IperfResult object
+    """
+    if result.error:
+        panel = Panel(
+            f"[red]✗ Test failed: {result.error}[/red]",
+            title=f"[bold]iperf3 — {result.server}[/bold]",
+            border_style="red",
+            box=box.ROUNDED
+        )
+        console.print(panel)
+        _log_output(panel)
+        return
+
+    def speed_color(mbps: float) -> str:
+        if mbps >= 900:
+            return "green"
+        elif mbps >= 100:
+            return "cyan"
+        elif mbps >= 10:
+            return "yellow"
+        else:
+            return "red"
+
+    dl_color = speed_color(result.download_mbps)
+    ul_color = speed_color(result.upload_mbps)
+
+    retrans_note = ""
+    if result.upload_retransmits > 0 or result.download_retransmits > 0:
+        retrans_note = (
+            f"\n[bold]Retransmits[/bold] "
+            f"↑ {result.upload_retransmits}  ↓ {result.download_retransmits}"
+        )
+
+    details = (
+        f"[bold]Server[/bold]      {result.server}\n"
+        f"[bold]Duration[/bold]    {result.duration_s}s per direction\n"
+        f"[bold]Download[/bold]    [{dl_color}]{result.download_mbps:.1f} Mbps[/{dl_color}]\n"
+        f"[bold]Upload[/bold]      [{ul_color}]{result.upload_mbps:.1f} Mbps[/{ul_color}]"
+        f"{retrans_note}"
+    )
+
+    panel = Panel(
+        details,
+        title="[bold]iperf3 Bandwidth Test[/bold]",
+        border_style="cyan",
+        box=box.ROUNDED
+    )
+    console.print(panel)
+    _log_output(panel)
 
 
 def show_dns_reliability(dns_result: dict):

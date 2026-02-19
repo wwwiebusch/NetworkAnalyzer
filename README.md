@@ -27,10 +27,11 @@ A comprehensive network analysis tool for macOS that provides deep insights into
 - **Comprehensive Interface Analysis**: Detailed information about all network interfaces
 - **WiFi Diagnostics**: Signal strength, channel analysis, SNR, interference detection
 - **Network Performance**: Speed tests, latency measurements, packet loss analysis
+- **iperf3 Bandwidth Testing**: Upload and download throughput via iperf3 server
 - **Health Assessment**: Automated network health scoring with recommendations
 - **Dual Mode Operation**: Works both offline (no internet) and online (with internet)
 - **Professional UI**: Rich terminal interface with color-coded tables and panels
-- **Detailed Logging**: Structured JSON and human-readable logs
+- **Detailed Logging**: Structured JSON and human-readable logs with optional comment annotation
 
 ## Requirements
 
@@ -106,6 +107,22 @@ The DNS test shows:
 
 **Note:** This test takes 1-2 minutes as it queries 100 different domains to provide a comprehensive reliability assessment.
 
+### iperf3 Bandwidth Test
+Run a full upload and download bandwidth test against an iperf3 server:
+```bash
+python main.py -i en0 --iperf3 192.168.1.100
+python main.py -i en0 --iperf3 192.168.1.100 --mode online
+```
+Requires an iperf3 server running on the target IP (default port 5201). Runs in online mode automatically. Results show upload Mbps, download Mbps, and TCP retransmits.
+
+### Annotate Log Files with a Comment
+Append a label to log filenames and embed the full comment in the log headers:
+```bash
+python main.py -i en0 --comment "HomeNetwork"
+python main.py -i en0 --comment "test run after router reboot"
+```
+The first word of the comment is appended to all log filenames (e.g., `network_analysis_20260220_143022_HomeNetwork.log`). The full comment text is written into the log file header.
+
 ### Custom Log Location
 ```bash
 python main.py -i en0 --output ~/Desktop/network_analysis.log
@@ -120,6 +137,8 @@ python main.py -i en0 --output ~/Desktop/network_analysis.log
 | `--mode` | Operating mode: `offline`, `online`, or `auto` (default: auto) |
 | `--no-wifi-scan` | Skip WiFi network scanning (faster) |
 | `--skip-dns-test` | Skip DNS reliability test (runs by default in online mode, saves 1-2 min) |
+| `--iperf3 IP` | Run iperf3 upload+download bandwidth test against the specified server |
+| `--comment TEXT` | Annotate logs with a comment; first word is appended to log filenames |
 | `--output` | Custom log file path |
 | `-v`, `--version` | Show version and exit |
 
@@ -165,6 +184,11 @@ python main.py -i en0 --output ~/Desktop/network_analysis.log
 - **Download/Upload**: Measured in Mbps
 - **Latency**: Network latency under load
 - **Responsiveness**: Round-trips per minute (RPM)
+
+### iperf3 Test (Optional)
+- **Upload**: Measured in Mbps (sender direction)
+- **Download**: Measured in Mbps (reverse mode)
+- **Retransmits**: TCP retransmit count per direction (indicator of packet loss/congestion)
 
 ### Health Status
 - **Overall Score**: 0-100 scale
@@ -218,8 +242,14 @@ The networkQuality test can take 30-90 seconds. If it consistently hangs, use `-
 ## Log Files
 
 Logs are saved in the `./logs/` directory with timestamped filenames:
-- `network_analysis_YYYYMMDD_HHMMSS.log` - Human-readable log
+- `network_analysis_YYYYMMDD_HHMMSS.log` - Structured debug/info log
+- `network_analysis_YYYYMMDD_HHMMSS_output.txt` - Plain-text mirror of all console output
 - `network_analysis_YYYYMMDD_HHMMSS.json` - Structured JSON data
+
+When `--comment` is used, the first word of the comment is appended to all filenames:
+- `network_analysis_YYYYMMDD_HHMMSS_HomeNetwork.log`
+- `network_analysis_YYYYMMDD_HHMMSS_HomeNetwork_output.txt`
+- `network_analysis_YYYYMMDD_HHMMSS_HomeNetwork.json`
 
 ## Common Use Cases
 
@@ -259,6 +289,18 @@ python main.py -i en0 --output ~/network_logs/test_$(date +%Y%m%d_%H%M%S).log
 ```
 Run periodically to track network performance trends.
 
+### iperf3 Bandwidth Test to Local Server
+```bash
+python main.py -i en0 --iperf3 192.168.1.100
+```
+Requires an iperf3 server running on the target: `iperf3 -s`
+
+### Annotated Test Run
+```bash
+python main.py -i en0 --comment "after_firmware_update"
+```
+Creates log files like `network_analysis_..._after.log` with the full comment in the header.
+
 ## Finding Your Interface Name
 
 Common interface names on macOS:
@@ -292,6 +334,7 @@ Or use the tool's interactive mode to see all available interfaces.
 
 **Online Mode:**
 - `networkQuality` - Native macOS speed test
+- `iperf3` - Bandwidth testing (optional, requires server)
 - `dig` - DNS resolution testing
 - External APIs for public IP and geolocation
 
@@ -327,6 +370,11 @@ Contributions are welcome! Please ensure:
 - Documentation is updated for user-facing changes
 
 ## Version History
+
+### v1.1.0
+- Added `--iperf3 IP` parameter for upload/download bandwidth testing via iperf3
+- Added `--comment TEXT` parameter for log file annotation and filename labeling
+- Added `_output.txt` plain-text log mirroring all console output
 
 ### v1.0.0
 - Initial release

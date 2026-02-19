@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""macOS Network Analyzer - Main entry point."""
+"""WWWIEBUSCH Network Analyzer - Main entry point."""
 
 import argparse
 import sys
@@ -17,6 +17,7 @@ from network_analyzer.ui import (
     show_wifi_details,
     show_ping_results,
     show_speed_test_results,
+    show_iperf3_results,
     show_health_status,
     show_progress,
     show_wifi_scan,
@@ -44,6 +45,7 @@ from network_analyzer.collectors.online import (
     get_geolocation,
     run_speed_test,
     run_global_ping_tests,
+    run_iperf3_test,
     check_connectivity,
     test_dns_reliability
 )
@@ -60,11 +62,13 @@ def parse_arguments():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  %(prog)s                          Interactive mode
-  %(prog)s -i en0                   Analyze specific interface
-  %(prog)s --all                    Analyze all interfaces
-  %(prog)s -i en0 --mode offline    Force offline mode
-  %(prog)s -i en0 --no-wifi-scan    Skip WiFi scanning
+  %(prog)s                                  Interactive mode
+  %(prog)s -i en0                           Analyze specific interface
+  %(prog)s --all                            Analyze all interfaces
+  %(prog)s -i en0 --mode offline            Force offline mode
+  %(prog)s -i en0 --no-wifi-scan            Skip WiFi scanning
+  %(prog)s -i en0 --iperf3 192.168.1.100   Run iperf3 bandwidth test
+  %(prog)s -i en0 --comment "HomeNetwork"  Annotate log files
         """
     )
 
@@ -104,6 +108,18 @@ Examples:
     )
 
     parser.add_argument(
+        '--iperf3',
+        metavar='IP',
+        help='Run iperf3 bandwidth test against the specified server IP'
+    )
+
+    parser.add_argument(
+        '--comment',
+        metavar='TEXT',
+        help='Annotate log files with a comment (first word appended to filename)'
+    )
+
+    parser.add_argument(
         '-v', '--version',
         action='version',
         version=f'%(prog)s {__version__}'
@@ -117,7 +133,8 @@ def analyze_interface(
     mode: str,
     skip_wifi_scan: bool,
     skip_dns_test: bool,
-    logger: NetworkAnalyzerLogger
+    logger: NetworkAnalyzerLogger,
+    iperf3_ip: str = None
 ):
     """Analyze a single interface.
 
@@ -127,6 +144,7 @@ def analyze_interface(
         skip_wifi_scan: Whether to skip WiFi scanning
         skip_dns_test: Whether to skip DNS reliability test
         logger: Logger instance
+        iperf3_ip: Optional iperf3 server IP for bandwidth testing
     """
     console.print()
 
@@ -279,6 +297,26 @@ def analyze_interface(
         else:
             print_warning("Speed test not available (requires macOS 12.1+)")
 
+        # iperf3 bandwidth test (if server IP provided)
+        if iperf3_ip:
+            console.print()
+            print_info(f"Running iperf3 bandwidth test to {iperf3_ip}...")
+            with show_progress("Running iperf3 test...") as progress:
+                task = progress.add_task("Testing...", total=None)
+                iperf3_result = run_iperf3_test(iperf3_ip)
+                progress.update(task, completed=100)
+
+            show_iperf3_results(iperf3_result)
+            logger.log_section('iperf3', {
+                'server': iperf3_result.server,
+                'upload_mbps': iperf3_result.upload_mbps,
+                'download_mbps': iperf3_result.download_mbps,
+                'upload_retransmits': iperf3_result.upload_retransmits,
+                'download_retransmits': iperf3_result.download_retransmits,
+                'duration_s': iperf3_result.duration_s,
+                'error': iperf3_result.error
+            })
+
         # DNS reliability test (runs by default in online mode)
         if not skip_dns_test:
             console.print()
@@ -333,7 +371,7 @@ def main():
 
     # Initialize logger
     log_dir = str(Path(args.output).parent) if args.output else "./logs"
-    logger = NetworkAnalyzerLogger(log_dir)
+    logger = NetworkAnalyzerLogger(log_dir, comment=args.comment)
 
     # Set logger for UI dual output
     set_logger(logger)
@@ -351,7 +389,9 @@ def main():
         logger.log_section('session', {
             'mode': mode,
             'interface': args.interface,
-            'version': __version__
+            'version': __version__,
+            'comment': args.comment or '',
+            'iperf3_server': args.iperf3 or ''
         })
 
         # Get all interfaces
@@ -371,7 +411,7 @@ def main():
 
             print_success(f"Found {len(active_interfaces)} active interface(s)")
             for iface in active_interfaces:
-                analyze_interface(iface, mode, args.no_wifi_scan, args.skip_dns_test, logger)
+                analyze_interface(iface, mode, args.no_wifi_scan, args.skip_dns_test, logger, args.iperf3)
                 console.print("\n" + "="*80 + "\n")
 
         else:
@@ -395,7 +435,7 @@ def main():
                     return 1
 
             # Analyze selected interface
-            analyze_interface(selected, mode, args.no_wifi_scan, args.skip_dns_test, logger)
+            analyze_interface(selected, mode, args.no_wifi_scan, args.skip_dns_test, logger, args.iperf3)
 
         # Summary
         elapsed = time.time() - start_time

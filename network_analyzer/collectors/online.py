@@ -9,7 +9,7 @@ from network_analyzer.utils import (
     check_internet_connectivity,
     supports_network_quality
 )
-from network_analyzer.models import SpeedTestResult, PingResult
+from network_analyzer.models import SpeedTestResult, PingResult, IperfResult
 import logging
 
 logger = logging.getLogger(__name__)
@@ -315,6 +315,72 @@ def test_dns_reliability(dns_server: Optional[str] = None, num_domains: int = 10
         result['avg_response_time'] = None
         result['min_response_time'] = None
         result['max_response_time'] = None
+
+    return result
+
+
+def run_iperf3_test(server: str, duration: int = 10, port: int = 5201) -> IperfResult:
+    """Run iperf3 bandwidth test to a server.
+
+    Runs both upload and download (reverse) tests.
+
+    Args:
+        server: iperf3 server IP or hostname
+        duration: Test duration in seconds per direction
+        port: iperf3 server port (default 5201)
+
+    Returns:
+        IperfResult with upload and download measurements
+    """
+    result = IperfResult(server=server, duration_s=duration)
+
+    def parse_mbps(stdout: str) -> tuple[float, int]:
+        """Return (Mbps, retransmits) from iperf3 JSON output."""
+        try:
+            data = json.loads(stdout)
+            end = data.get('end', {})
+            # sender summary for upload, receiver summary for download (reverse)
+            sent = end.get('sum_sent', end.get('sum', {}))
+            mbps = sent.get('bits_per_second', 0) / 1_000_000
+            retrans = sent.get('retransmits', 0)
+            return round(mbps, 2), retrans
+        except Exception:
+            # Fallback: parse plain text
+            match = re.search(r'([\d.]+)\s+Mbits/sec.*?(sender|receiver)', stdout)
+            if match:
+                return float(match.group(1)), 0
+            return 0.0, 0
+
+    # Upload test
+    try:
+        stdout, stderr, code = execute_command(
+            ["iperf3", "-c", server, "-p", str(port), "-t", str(duration), "-J"],
+            timeout=duration + 30
+        )
+        if code == 0:
+            result.upload_mbps, result.upload_retransmits = parse_mbps(stdout)
+        else:
+            error_msg = stderr.strip() or "Upload test failed"
+            logger.error(f"iperf3 upload failed: {error_msg}")
+            result.error = error_msg
+            return result
+    except Exception as e:
+        logger.error(f"iperf3 upload error: {e}")
+        result.error = str(e)
+        return result
+
+    # Download test (reverse mode)
+    try:
+        stdout, stderr, code = execute_command(
+            ["iperf3", "-c", server, "-p", str(port), "-t", str(duration), "-R", "-J"],
+            timeout=duration + 30
+        )
+        if code == 0:
+            result.download_mbps, result.download_retransmits = parse_mbps(stdout)
+        else:
+            logger.error(f"iperf3 download failed: {stderr.strip()}")
+    except Exception as e:
+        logger.error(f"iperf3 download error: {e}")
 
     return result
 

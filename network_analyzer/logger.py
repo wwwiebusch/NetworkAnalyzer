@@ -2,34 +2,48 @@
 
 import logging
 import json
+import re
 from pathlib import Path
 from datetime import datetime
-from typing import Any
+from typing import Any, Optional
 
 
 class NetworkAnalyzerLogger:
     """Logger for network analysis with structured output."""
 
-    def __init__(self, log_dir: str = "./logs"):
+    def __init__(self, log_dir: str = "./logs", comment: Optional[str] = None):
         """Initialize logger.
 
         Args:
             log_dir: Directory for log files
+            comment: Optional free-text comment to embed in logs and filename
         """
         self.log_dir = Path(log_dir)
         self.log_dir.mkdir(exist_ok=True)
+        self.comment = comment
 
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        self.log_file = self.log_dir / f"network_analysis_{timestamp}.log"
-        self.text_log_file = self.log_dir / f"network_analysis_{timestamp}_output.txt"
+
+        # Extract first word of comment for filename (alphanumeric only)
+        filename_suffix = ""
+        if comment:
+            first_word = re.split(r'[\s_\-/\\]+', comment.strip())[0]
+            first_word = re.sub(r'[^a-zA-Z0-9]', '', first_word)
+            if first_word:
+                filename_suffix = f"_{first_word}"
+
+        self.log_file = self.log_dir / f"network_analysis_{timestamp}{filename_suffix}.log"
+        self.text_log_file = self.log_dir / f"network_analysis_{timestamp}{filename_suffix}_output.txt"
 
         self._setup_logging()
         self.data: dict[str, Any] = {}
 
-        # Initialize text log file
+        # Initialize text log file with comment as first content
         with open(self.text_log_file, 'w') as f:
-            f.write(f"WWWIEBUSCH Network Analyzer - Output Log\n")
+            f.write("WWWIEBUSCH Network Analyzer - Output Log\n")
             f.write(f"Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
+            if comment:
+                f.write(f"Comment:   {comment}\n")
             f.write("=" * 80 + "\n\n")
 
     def _setup_logging(self):
